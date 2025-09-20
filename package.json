@@ -1,7 +1,7 @@
 {
   "name": "price-comparator",
   "version": "1.0.0",
-  "description": "",
+  "description": "This is a simple yet powerful web scraper built with Node.js and Puppeteer. It automatically extracts product prices from e-commerce websites like Amazon and Croma and saves the results to a CSV file for easy analysis.",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -13,7 +13,10 @@
   "dependencies": {
     "axios": "^1.12.2",
     "cheerio": "^1.1.2",
+    "csv-writer": "^1.6.0",
     "json2csv": "^6.0.0-alpha.2",
-    "puppeteer": "^24.21.0"
+    "puppeteer": "^24.22.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
   }
 }

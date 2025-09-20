@@ -65,3 +65,14 @@ Contributions, issues, and feature requests are welcome! Feel free to check the 
 
 ---
 _This project is for educational purposes only. Please be respectful of the websites you scrape and their terms of service._
+
+/**
+ * HOW TO RUN RANGESCRAPER.JS:
+ * 1. Make sure you have installed the required packages:
+ * npm install puppeteer-extra puppeteer-extra-plugin-stealth csv-writer
+ * 2. Run from your terminal with command-line arguments:
+ * node rangeScraper.js "<Search Term>" <MinPrice> <MaxPrice>
+ * 3. Example:
+ * node rangeScraper.js "mechanical keyboard" 4000 10000
+ * 4. The output will be saved to a file like "scraped_mechanical_keyboard.csv".
+ */

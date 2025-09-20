@@ -1,89 +1,112 @@
-const puppeteer = require('puppeteer');
+// scraper.js
+const puppeteer = require('puppeteer-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+puppeteer.use(StealthPlugin());
 
-const { Parser } = require('json2csv');
-const fs = require('fs');              
-
-async function scrape(url) {
-  const browser = await puppeteer.launch({ headless: true });
-  const page = await browser.newPage();
-  await page.setViewport({ width: 1280, height: 800 });
-  await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36');
-
-  try {
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
-  } catch (error) {
-    console.error(`Error navigating to ${url}: ${error.message}`);
-    await browser.close();
-    return { url, data: 'Could not load page' };
-  }
-  
-  let data = 'Data not found';
-  let site = 'sample'
-
-  if (url.includes('croma.com')) {
-    try {
-
-      const priceSelector = 'span.amount';
-      await page.waitForSelector(priceSelector, { timeout: 10000 });
-      let priceText = await page.$eval(priceSelector, el => el.innerText.trim());
-      
-      data = priceText.includes('₹') ? priceText : `₹${priceText}`;
-      site = 'Croma'
-      
-    } catch {
-       console.error(`Could not find price for Croma URL: ${url}`);
-    }
-  } 
-  else if (url.includes('amazon.in')) {
-    try {
-      site = 'Amazon'
-      const priceSelector = 'span.a-price-whole';
-      await page.waitForSelector(priceSelector, { timeout: 10000 });
-      data = `₹${await page.$eval(priceSelector, el => el.innerText.trim().replace(/,$/, ''))}`;
-    } catch {
-      console.error(`Could not find price for Amazon URL: ${url}.`);
-    }
-  }
-
-  await browser.close();
-  return { url, data, site };
+// A helper function to add a random delay
+function delay(time) {
+  return new Promise(function(resolve) { 
+    setTimeout(resolve, time)
+  });
 }
 
-(async () => {
-  const urls = process.argv.slice(2);
-  if (urls.length === 0) {
-    console.log("Please provide URLs as command-line arguments.");
-    return;
-  }
-  
-  const results = [];
+async function scrapeAmazon(searchTerm, minPrice, maxPrice) {
+  let browser;
+  const scrapedData = [];
 
-  for (let url of urls) {
-    console.log(`Scraping ${url}...`);
-    const result = await scrape(url);
-    results.push(result);
-  }
+  console.log(`🚀 Starting the new 2-step scraper for "${searchTerm}"...`);
 
   try {
-    // Checking if the file already exists to decide if we need to add the header
-    const fileExists = fs.existsSync('./results.csv');
-  
-    const parser = new Parser({
-      fields: ['site', 'data'],
-      header: !fileExists //  adding the header only if the file doesn't exist
-    });
-    
-    const csv = parser.parse(results);
-  
-    // Use appendFileSync to add to the file instead of overwriting
-    // We add a newline character before the new data if the file already has content
-    fs.appendFileSync('./results.csv', (fileExists ? '\n' : '') + csv);
-  
-    console.log('\n Successfully appended results to results.csv');
-  } catch (err) {
-    console.error('Error writing to CSV file:', err);
-  }
+    browser = await puppeteer.launch({ headless: false, args: ['--start-maximized'] });
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1366, height: 768 });
 
-  console.log('\n--- Scraping Results ---');
-  results.forEach(r => console.log(`${r.site} → ${r.data}`));
-})();
+    // === STEP 1: Go to search page and collect all product links ===
+    console.log('--- Step 1: Collecting product links from search results ---');
+    // Using amazon.in as per your working code
+    const searchUrl = `https://www.amazon.in/s?k=${encodeURIComponent(searchTerm)}&low-price=${minPrice}&high-price=${maxPrice}`;
+    
+    console.log(`Navigating to: ${searchUrl}`);
+    await page.goto(searchUrl, { waitUntil: 'domcontentloaded' });
+
+    // Wait for the main results container to load
+    await page.waitForSelector('[data-component-type="s-search-results"]', { timeout: 20000 });
+
+    const productURLs = await page.$$eval(
+      'div[data-component-type="s-search-result"] h2 > a',
+      (links) => links.map(link => link.href)
+    );
+
+    console.log(`✅ Found ${productURLs.length} product links.`);
+
+    // === STEP 2: Visit each product link and scrape its data ===
+    console.log('--- Step 2: Visiting each link to scrape product details ---');
+    for (const url of productURLs) {
+      console.log(`\nNavigating to product page: ${url.substring(0, 50)}...`);
+      try {
+        await page.goto(url, { waitUntil: 'domcontentloaded' });
+        
+        // Use selectors for the individual product page
+        const titleSelector = '#productTitle';
+        const priceSelector = 'span.a-price-whole'; // Your working selector!
+
+        await page.waitForSelector(titleSelector, { timeout: 10000 });
+        await page.waitForSelector(priceSelector, { timeout: 10000 });
+
+        const title = await page.$eval(titleSelector, el => el.innerText.trim());
+        const price = await page.$eval(priceSelector, el => el.innerText.trim().replace(/[,.]/g, ''));
+        
+        scrapedData.push({
+          title: title,
+          price: `₹${price}`,
+          link: url
+        });
+        console.log(`  -> Scraped: ${title.substring(0, 40)}...`);
+
+      } catch (err) {
+        console.error(`  -> Failed to scrape data from ${url.substring(0, 50)}... Error: ${err.message}`);
+      }
+      
+      // IMPORTANT: Add a random delay to appear more human-like
+      const randomDelay = Math.floor(Math.random() * 2500) + 1000; // Delay between 1 and 3.5 seconds
+      await delay(randomDelay);
+    }
+    
+    return scrapedData;
+
+  } catch (error) {
+    console.error("❌ A critical error occurred:", error);
+    return scrapedData; // Return any data that was successfully scraped before the error
+  } finally {
+    if (browser) {
+      await browser.close();
+      console.log("\nBrowser closed.");
+    }
+  }
+}
+
+// --- Main execution ---
+const args = process.argv.slice(2); 
+if (args.length !== 3) {
+  console.error('❌ Incorrect arguments!');
+  console.log('Usage: node rangeScraper.js "<Search Term>" <MinPrice> <MaxPrice>');
+  process.exit(1); 
+}
+
+const [SEARCH_TERM, MIN_PRICE_STR, MAX_PRICE_STR] = args;
+const MIN_PRICE = parseInt(MIN_PRICE_STR, 10);
+const MAX_PRICE = parseInt(MAX_PRICE_STR, 10);
+
+if (isNaN(MIN_PRICE) || isNaN(MAX_PRICE)) {
+    console.error('❌ Error: Prices must be numbers.');
+    process.exit(1);
+}
+
+scrapeAmazon(SEARCH_TERM, MIN_PRICE, MAX_PRICE).then((data) => {
+  if (data.length > 0) {
+    console.log("\n--- FINAL SCRAPED DATA ---");
+    console.table(data);
+  } else {
+    console.log("\nNo data was scraped. The bot was likely blocked or no products were found.");
+  }
+});
