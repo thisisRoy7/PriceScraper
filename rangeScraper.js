@@ -27,11 +27,11 @@ async function scrapeAmazon(searchTerm, minPrice, maxPrice) {
   let browser;
   const scrapedData = [];
 
-  console.log(`🤖 Starting the HUMAN-LIKE scraper for "${searchTerm}"...`);
+  console.log(` Starting the HUMAN-LIKE scraper for "${searchTerm}"...`);
 
   try {
     browser = await puppeteer.launch({
-      headless: 'new', // Set to false to watch the browser in action.
+      headless: false, // Set to false to watch the browser in action.
       args: ['--start-maximized']
     });
 
@@ -107,7 +107,7 @@ async function scrapeAmazon(searchTerm, minPrice, maxPrice) {
     }
     
     return scrapedData;
-
+    
   } catch (error) {
     console.error("❌ A critical error occurred:", error);
     return scrapedData;
